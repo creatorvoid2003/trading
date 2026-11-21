@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Trading Zones",
+    "slug": "trading-zones",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#070B1A",
+    "ios": { "supportsTablet": false, "bundleIdentifier": "com.creatorvoid.tradingzones" },
+    "android": { "package": "com.creatorvoid.tradingzones" }
+  }
+}
