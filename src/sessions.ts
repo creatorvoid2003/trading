@@ -1,4 +1,5 @@
 // Pure, dependency-free session/zone logic. DST-aware via Intl (no date libs).
+import { holidayName, earlyCloseName } from './holidays.ts';
 
 export type SessionId = 'sydney' | 'tokyo' | 'london' | 'newyork';
 
@@ -164,7 +165,7 @@ export function goldView(level: Level): GoldView {
 // ---------- US stocks ----------
 export type StockPhase = 'closed' | 'premarket' | 'opening' | 'morning' | 'midday' | 'afternoon' | 'power' | 'afterhours';
 
-export interface StockView { phase: StockPhase; label: string; tip: string; rating: 'best' | 'good' | 'fair' | 'avoid'; nextAt: number | null; nextLabel: string | null }
+export interface StockView { note: string | null; phase: StockPhase; label: string; tip: string; rating: 'best' | 'good' | 'fair' | 'avoid'; nextAt: number | null; nextLabel: string | null }
 
 const STOCK_BOUNDS: [number, number, StockPhase][] = [
   [4, 0, 'premarket'], [9, 30, 'opening'], [10, 0, 'morning'], [11, 30, 'midday'],
@@ -183,33 +184,46 @@ const STOCK_INFO: Record<StockPhase, { label: string; tip: string; rating: Stock
 };
 
 function nyParts(t: number) {
-  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', weekday: 'short', hour: 'numeric', minute: 'numeric' }).formatToParts(new Date(t));
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short', hour: 'numeric', minute: 'numeric' }).formatToParts(new Date(t));
   const g = (k: string) => p.find((x) => x.type === k)!.value;
-  return { wd: g('weekday'), mins: Number(g('hour')) * 60 + Number(g('minute')) };
+  return { wd: g('weekday'), y: Number(g('year')), m: Number(g('month')) - 1, d: Number(g('day')), mins: Number(g('hour')) * 60 + Number(g('minute')) };
 }
 
 export function stockPhaseAt(t: number): StockPhase {
-  const { wd, mins } = nyParts(t);
-  if (wd === 'Sat' || wd === 'Sun') return 'closed';
+  const { wd, y, m, d, mins } = nyParts(t);
+  if (wd === 'Sat' || wd === 'Sun' || holidayName(y, m, d)) return 'closed';
+  const early = !!earlyCloseName(y, m, d);
   let phase: StockPhase = 'closed';
-  for (const [h, m, ph] of STOCK_BOUNDS) if (mins >= h * 60 + m) phase = ph;
+  for (const [h, mi, ph] of STOCK_BOUNDS) if (mins >= h * 60 + mi) phase = ph;
+  if (early) {
+    if (mins >= 17 * 60) return 'closed';
+    if (mins >= 13 * 60) return 'afterhours'; // 1:00 pm early close; extended hours run to 5 pm
+  }
   return phase;
 }
 
-/** Note: US market holidays are not modelled. */
+/** Today's US market note, e.g. "Closed: Thanksgiving" or "Early close 1:00 pm". */
+export function stockNote(t: number): string | null {
+  const { y, m, d } = nyParts(t);
+  const h = holidayName(y, m, d);
+  if (h) return `US markets closed: ${h}`;
+  const e = earlyCloseName(y, m, d);
+  return e ? `Early close at 1:00 pm ET (${e})` : null;
+}
+
 export function stockView(now: number): StockView {
   const phase = stockPhaseAt(now);
   const d = new Date(now);
   let nextAt: number | null = null;
   outer: for (let k = 0; k <= 4; k++) {
     const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + k));
-    for (const [h, m] of STOCK_BOUNDS) {
+    for (const [h, m] of [...STOCK_BOUNDS.map(([a, b]) => [a, b] as [number, number]), [13, 0], [17, 0]].sort((x, y) => x[0] * 60 + x[1] - (y[0] * 60 + y[1]))) {
       const t = zonedToUtc('America/New_York', day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h, m);
       if (t > now && stockPhaseAt(t) !== phase) { nextAt = t; break outer; }
     }
   }
   const info = STOCK_INFO[phase];
-  return { phase, ...info, nextAt, nextLabel: nextAt ? STOCK_INFO[stockPhaseAt(nextAt)].label : null };
+  return { note: stockNote(now), phase, ...info, nextAt, nextLabel: nextAt ? STOCK_INFO[stockPhaseAt(nextAt)].label : null };
 }
 
 export function fmtDuration(ms: number): string {

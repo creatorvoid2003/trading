@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { loadEnabled, scheduleAlerts, setEnabled } from './src/notify';
 import { SESSIONS, windowsAround, zoneAt, stockView, fmtDuration, Level } from './src/sessions';
 
 const LEVEL_COLOR: Record<Level, string> = {
@@ -39,6 +40,9 @@ function Timeline({ now }: { now: number }) {
 export default function App() {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
+  const [alerts, setAlerts] = useState(false);
+  useEffect(() => { loadEnabled().then((on) => { setAlerts(on); if (on) scheduleAlerts().catch(() => {}); }); }, []);
+  const toggle = async () => setAlerts(await setEnabled(!alerts));
   const z = zoneAt(now);
   const st = stockView(now);
   const color = LEVEL_COLOR[z.level];
@@ -77,15 +81,20 @@ export default function App() {
         <View style={s.card}>
           <Text style={s.h2}>US stocks</Text>
           <Text style={[s.rate, { color: RATE_COLOR[st.rating] }]}>{st.label}</Text>
+          {st.note && <Text style={s.noteT}>{st.note}</Text>}
           <Text style={s.body}>{st.tip}</Text>
           {st.nextAt && <Text style={s.next}>{st.nextLabel} in {fmtDuration(st.nextAt - now)} · {clock(st.nextAt)}</Text>}
         </View>
+
+        <Pressable onPress={toggle} style={[s.alertBtn, alerts && s.alertOn]}>
+          <Text style={s.alertT}>{alerts ? '🔔 Alerts on: 5 min before London, Prime zone, stock open and power hour' : '🔕 Turn on zone alerts'}</Text>
+        </Pressable>
 
         <Timeline now={now} />
 
         <View style={s.card}>
           <Text style={s.h2}>Guardrails</Text>
-          <Text style={s.body}>• Risk a fixed small % per trade and always set a stop-loss.{'\n'}• More movement means more risk, so size down in the overlap.{'\n'}• Avoid entries 30 min around the 17:00 New York rollover.{'\n'}• Times shift with daylight saving; this app adjusts automatically. US market holidays are not covered yet.</Text>
+          <Text style={s.body}>• Risk a fixed small % per trade and always set a stop-loss.{'\n'}• More movement means more risk, so size down in the overlap.{'\n'}• Avoid entries 30 min around the 17:00 New York rollover.{'\n'}• Times shift with daylight saving and US market holidays are included; this app adjusts automatically.</Text>
         </View>
 
         <Text style={s.disc}>Educational timing tool. No trade is ever "perfect" and nothing here is financial advice.</Text>
@@ -104,6 +113,10 @@ const s = StyleSheet.create({
   body: { color: '#C7CCE0', fontSize: 15, lineHeight: 22 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   chip: { color: '#070B1A', fontWeight: '800', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, overflow: 'hidden' },
+  noteT: { color: '#FFC93C', fontWeight: '700', marginBottom: 6 },
+  alertBtn: { backgroundColor: '#141C3A', borderRadius: 14, padding: 14, marginBottom: 12 },
+  alertOn: { backgroundColor: '#0F3B2E' },
+  alertT: { color: '#fff', fontWeight: '700', textAlign: 'center' },
   rate: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
   pair: { color: '#fff', backgroundColor: '#1A2447', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, overflow: 'hidden', fontWeight: '700' },
   card: { backgroundColor: '#0E1530', borderRadius: 16, padding: 16, marginBottom: 12 },
