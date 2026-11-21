@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SESSIONS, windowsAround, zoneAt, fmtDuration, Level } from './src/sessions';
+import { SESSIONS, windowsAround, zoneAt, stockView, fmtDuration, Level } from './src/sessions';
 
 const LEVEL_COLOR: Record<Level, string> = {
   prime: '#FFC93C', strong: '#2EE6A6', moderate: '#4D9DFF', quiet: '#7A8199', closed: '#FF5C7A',
 };
+
+const RATE_COLOR = { best: '#FFC93C', good: '#2EE6A6', fair: '#4D9DFF', avoid: '#FF5C7A' } as const;
 
 const DAY_MS = 86_400_000;
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -38,6 +40,7 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const i = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(i); }, []);
   const z = zoneAt(now);
+  const st = stockView(now);
   const color = LEVEL_COLOR[z.level];
 
   return (
@@ -65,18 +68,24 @@ export default function App() {
 
         {z.caution && <View style={s.warn}><Text style={s.warnT}>⚠ {z.caution}</Text></View>}
 
-        {z.pairs.length > 0 && (
-          <View style={s.card}>
-            <Text style={s.h2}>Focus pairs right now</Text>
-            <View style={s.chips}>{z.pairs.map((p) => <Text key={p} style={s.pair}>{p}</Text>)}</View>
-          </View>
-        )}
+        <View style={s.card}>
+          <Text style={s.h2}>Gold (XAU/USD)</Text>
+          <Text style={[s.rate, { color: RATE_COLOR[z.gold.rating] }]}>{z.gold.label}</Text>
+          <Text style={s.body}>{z.gold.tip}</Text>
+        </View>
+
+        <View style={s.card}>
+          <Text style={s.h2}>US stocks</Text>
+          <Text style={[s.rate, { color: RATE_COLOR[st.rating] }]}>{st.label}</Text>
+          <Text style={s.body}>{st.tip}</Text>
+          {st.nextAt && <Text style={s.next}>{st.nextLabel} in {fmtDuration(st.nextAt - now)} · {clock(st.nextAt)}</Text>}
+        </View>
 
         <Timeline now={now} />
 
         <View style={s.card}>
           <Text style={s.h2}>Guardrails</Text>
-          <Text style={s.body}>• Risk a fixed small % per trade and always set a stop-loss.{'\n'}• More movement means more risk, so size down in the overlap.{'\n'}• Avoid entries 30 min around the 17:00 New York rollover.{'\n'}• Session times shift with daylight saving; this app adjusts automatically.</Text>
+          <Text style={s.body}>• Risk a fixed small % per trade and always set a stop-loss.{'\n'}• More movement means more risk, so size down in the overlap.{'\n'}• Avoid entries 30 min around the 17:00 New York rollover.{'\n'}• Times shift with daylight saving; this app adjusts automatically. US market holidays are not covered yet.</Text>
         </View>
 
         <Text style={s.disc}>Educational timing tool. No trade is ever "perfect" and nothing here is financial advice.</Text>
@@ -95,6 +104,7 @@ const s = StyleSheet.create({
   body: { color: '#C7CCE0', fontSize: 15, lineHeight: 22 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   chip: { color: '#070B1A', fontWeight: '800', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, overflow: 'hidden' },
+  rate: { fontSize: 18, fontWeight: '800', marginBottom: 4 },
   pair: { color: '#fff', backgroundColor: '#1A2447', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, overflow: 'hidden', fontWeight: '700' },
   card: { backgroundColor: '#0E1530', borderRadius: 16, padding: 16, marginBottom: 12 },
   h2: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 },

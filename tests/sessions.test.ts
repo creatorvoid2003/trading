@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { zoneAt, zonedToUtc, marketOpen, windowsAround } from '../src/sessions.ts';
+import { zoneAt, zonedToUtc, marketOpen, windowsAround, stockView, goldView } from '../src/sessions.ts';
 
 const utc = (s: string) => Date.parse(s);
 
@@ -43,4 +43,23 @@ test('rollover caution and next change', () => {
 
 test('windows cover multiple days', () => {
   assert.ok(windowsAround(utc('2026-01-14T00:00:00Z')).length >= 20);
+});
+
+test('gold rating follows zone', () => {
+  assert.equal(zoneAt(utc('2026-01-14T14:00:00Z')).gold.rating, 'best');
+  assert.equal(goldView('quiet').rating, 'avoid');
+});
+
+test('stock phases (NY time, winter)', () => {
+  assert.equal(stockView(utc('2026-01-14T14:35:00Z')).phase, 'opening'); // 09:35 ET
+  assert.equal(stockView(utc('2026-01-14T17:00:00Z')).phase, 'midday'); // 12:00 ET
+  assert.equal(stockView(utc('2026-01-14T20:30:00Z')).phase, 'power'); // 15:30 ET
+  assert.equal(stockView(utc('2026-01-17T15:00:00Z')).phase, 'closed'); // Sat
+  const v = stockView(utc('2026-01-14T14:35:00Z'));
+  assert.equal(v.nextAt, utc('2026-01-14T15:00:00Z'));
+});
+
+test('stocks closed Friday night, reopen Monday pre-market', () => {
+  const v = stockView(utc('2026-01-17T15:00:00Z'));
+  assert.equal(v.nextAt, utc('2026-01-19T09:00:00Z')); // Mon 04:00 ET
 });

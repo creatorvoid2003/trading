@@ -10,14 +10,13 @@ export interface SessionDef {
   close: [number, number];
   weight: number; // typical liquidity weight
   color: string;
-  pairs: string[];
 }
 
 export const SESSIONS: SessionDef[] = [
-  { id: 'sydney', name: 'Sydney', tz: 'Australia/Sydney', open: [7, 0], close: [16, 0], weight: 1, color: '#F5C542', pairs: ['AUD/USD', 'NZD/USD', 'AUD/JPY'] },
-  { id: 'tokyo', name: 'Tokyo', tz: 'Asia/Tokyo', open: [9, 0], close: [18, 0], weight: 2, color: '#FF6B9D', pairs: ['USD/JPY', 'AUD/JPY', 'EUR/JPY'] },
-  { id: 'london', name: 'London', tz: 'Europe/London', open: [8, 0], close: [17, 0], weight: 3, color: '#4D9DFF', pairs: ['EUR/USD', 'GBP/USD', 'EUR/GBP'] },
-  { id: 'newyork', name: 'New York', tz: 'America/New_York', open: [8, 0], close: [17, 0], weight: 3, color: '#2EE6A6', pairs: ['EUR/USD', 'USD/CAD', 'USD/JPY'] },
+  { id: 'sydney', name: 'Sydney', tz: 'Australia/Sydney', open: [7, 0], close: [16, 0], weight: 1, color: '#F5C542' },
+  { id: 'tokyo', name: 'Tokyo', tz: 'Asia/Tokyo', open: [9, 0], close: [18, 0], weight: 2, color: '#FF6B9D' },
+  { id: 'london', name: 'London', tz: 'Europe/London', open: [8, 0], close: [17, 0], weight: 3, color: '#4D9DFF' },
+  { id: 'newyork', name: 'New York', tz: 'America/New_York', open: [8, 0], close: [17, 0], weight: 3, color: '#2EE6A6' },
 ];
 
 export interface Window { id: SessionId; start: number; end: number } // UTC ms
@@ -77,7 +76,7 @@ export interface ZoneState {
   active: SessionId[];
   score: number;
   label: string;
-  pairs: string[];
+  gold: GoldView;
   playbook: string;
   caution: string | null;
   nextChangeAt: number | null;
@@ -90,8 +89,8 @@ const LABELS: Record<Level, string> = {
 
 const PLAYBOOK: Record<Level, string> = {
   prime: 'London + New York overlap: deepest liquidity, tightest spreads, biggest moves. Best window for trend and breakout setups.',
-  strong: 'One major session is live. Good liquidity; favour pairs native to that session.',
-  moderate: 'Mid-liquidity. Ranges are common; JPY and AUD pairs are the natural focus.',
+  strong: 'One major session is live. Good liquidity; trends tend to develop here.',
+  moderate: 'Mid-liquidity. Ranges are common; wait for the London breakout.',
   quiet: 'Thin liquidity and sideways chop. Spreads can widen; breakouts fail more often.',
   closed: 'Weekend. Plan your week and review past trades.',
 };
@@ -106,13 +105,6 @@ export function levelFor(active: SessionId[]): { level: Level; score: number } {
 
 function activeAt(ws: Window[], t: number): SessionId[] {
   return ws.filter((w) => t >= w.start && t < w.end).map((w) => w.id);
-}
-
-export function pairsFor(active: SessionId[]): string[] {
-  if (active.includes('london') && active.includes('newyork')) return ['EUR/USD', 'GBP/USD', 'USD/CAD', 'XAU/USD'];
-  const set: string[] = [];
-  for (const id of active) for (const p of SESSIONS.find((s) => s.id === id)!.pairs) if (!set.includes(p)) set.push(p);
-  return set.slice(0, 4);
 }
 
 /** Within 30 min of the 17:00 New York daily rollover, spreads blow out. */
@@ -148,11 +140,76 @@ export function zoneAt(now: number): ZoneState {
   }
 
   return {
-    level: lv, active, score, label: LABELS[lv], pairs: open ? pairsFor(active) : [],
+    level: lv, active, score, label: LABELS[lv], gold: goldView(lv),
     playbook: PLAYBOOK[lv],
     caution: open && nearRollover(now) ? 'Daily rollover (17:00 New York): spreads are wide. Avoid new entries.' : null,
     nextChangeAt, nextLabel,
   };
+}
+
+
+// ---------- Gold (XAU/USD) ----------
+export interface GoldView { rating: 'best' | 'good' | 'fair' | 'avoid'; label: string; tip: string }
+
+export function goldView(level: Level): GoldView {
+  switch (level) {
+    case 'prime': return { rating: 'best', label: 'Best window for gold', tip: 'London + New York overlap: deepest gold liquidity and the biggest moves. Watch 08:30 New York US data for spikes.' };
+    case 'strong': return { rating: 'good', label: 'Good for gold', tip: 'A major session is live. Trends develop here; the London open often sets the day\'s direction.' };
+    case 'moderate': return { rating: 'fair', label: 'Gold is ranging', tip: 'Asian hours: usually sideways. Mark the range high/low for the London breakout.' };
+    case 'quiet': return { rating: 'avoid', label: 'Thin gold market', tip: 'Low liquidity, wider spreads, false moves. Better to wait.' };
+    default: return { rating: 'avoid', label: 'Gold is closed', tip: 'Weekend. Plan levels for the week.' };
+  }
+}
+
+// ---------- US stocks ----------
+export type StockPhase = 'closed' | 'premarket' | 'opening' | 'morning' | 'midday' | 'afternoon' | 'power' | 'afterhours';
+
+export interface StockView { phase: StockPhase; label: string; tip: string; rating: 'best' | 'good' | 'fair' | 'avoid'; nextAt: number | null; nextLabel: string | null }
+
+const STOCK_BOUNDS: [number, number, StockPhase][] = [
+  [4, 0, 'premarket'], [9, 30, 'opening'], [10, 0, 'morning'], [11, 30, 'midday'],
+  [14, 0, 'afternoon'], [15, 0, 'power'], [16, 0, 'afterhours'], [20, 0, 'closed'],
+];
+
+const STOCK_INFO: Record<StockPhase, { label: string; tip: string; rating: StockView['rating'] }> = {
+  closed: { label: 'US stocks closed', tip: 'No trading. Build your watchlist and plan entries.', rating: 'avoid' },
+  premarket: { label: 'Pre-market', tip: 'Thin and news driven. Check gappers and earnings; spreads are wide.', rating: 'fair' },
+  opening: { label: 'Opening drive (first 30 min)', tip: 'Highest volume and volatility of the day. Big moves but fast reversals: wait for the first 5-15 min range.', rating: 'best' },
+  morning: { label: 'Morning trend', tip: 'Strong liquidity and cleaner trends once the open settles.', rating: 'good' },
+  midday: { label: 'Midday lull', tip: 'Volume dries up and prices chop. Poor window for new entries.', rating: 'avoid' },
+  afternoon: { label: 'Afternoon pick-up', tip: 'Volume starts to return ahead of the close.', rating: 'fair' },
+  power: { label: 'Power hour', tip: 'Last hour: heavy volume and trend continuation or reversals into the close.', rating: 'best' },
+  afterhours: { label: 'After-hours', tip: 'Thin and earnings driven. Big spreads; use limit orders only.', rating: 'fair' },
+};
+
+function nyParts(t: number) {
+  const p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', weekday: 'short', hour: 'numeric', minute: 'numeric' }).formatToParts(new Date(t));
+  const g = (k: string) => p.find((x) => x.type === k)!.value;
+  return { wd: g('weekday'), mins: Number(g('hour')) * 60 + Number(g('minute')) };
+}
+
+export function stockPhaseAt(t: number): StockPhase {
+  const { wd, mins } = nyParts(t);
+  if (wd === 'Sat' || wd === 'Sun') return 'closed';
+  let phase: StockPhase = 'closed';
+  for (const [h, m, ph] of STOCK_BOUNDS) if (mins >= h * 60 + m) phase = ph;
+  return phase;
+}
+
+/** Note: US market holidays are not modelled. */
+export function stockView(now: number): StockView {
+  const phase = stockPhaseAt(now);
+  const d = new Date(now);
+  let nextAt: number | null = null;
+  outer: for (let k = 0; k <= 4; k++) {
+    const day = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + k));
+    for (const [h, m] of STOCK_BOUNDS) {
+      const t = zonedToUtc('America/New_York', day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), h, m);
+      if (t > now && stockPhaseAt(t) !== phase) { nextAt = t; break outer; }
+    }
+  }
+  const info = STOCK_INFO[phase];
+  return { phase, ...info, nextAt, nextLabel: nextAt ? STOCK_INFO[stockPhaseAt(nextAt)].label : null };
 }
 
 export function fmtDuration(ms: number): string {

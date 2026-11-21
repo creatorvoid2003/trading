@@ -1,6 +1,6 @@
 # Trading Zones
 
-A mobile app (Expo / React Native, iOS + Android) that shows which forex trading zone the market is in right now, in your own time zone: Prime (London + New York overlap), Strong, Moderate, Quiet or Closed. It adds countdowns to the next zone change, focus pairs for the live sessions, and risk guardrails.
+A mobile app (Expo / React Native, iOS + Android) that shows which forex trading zone the market is in right now, in your own time zone: Prime (London + New York overlap), Strong, Moderate, Quiet or Closed. It adds countdowns to the next zone change, a live rating for gold (XAU/USD) and US stocks (pre-market, opening drive, midday lull, power hour, after-hours), and risk guardrails.
 
 Session windows are computed from each market's local hours with full daylight-saving handling (the US and UK switch on different dates, which shifts the overlap).
 
