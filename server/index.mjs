@@ -1,9 +1,11 @@
 // Tiny API for the app's News & Events agent. Keeps the Anthropic key off the phone.
 //   ANTHROPIC_API_KEY (required)   APP_TOKEN (required, shared secret the app sends)
 //   MODEL (default claude-sonnet-5-5)   PORT (default 8787)
+//   SUPABASE_URL + SUPABASE_SECRET_KEY (optional: persist cache + rate limits; falls back to memory)
 import http from 'node:http';
 import Anthropic from '@anthropic-ai/sdk';
 import { SYSTEM_PROMPT, parseBriefing } from './briefing.mjs';
+import { backend, getCachedBriefing, saveBriefing, rateLimited, prune } from './store.mjs';
 
 const { ANTHROPIC_API_KEY, APP_TOKEN, MODEL = 'claude-sonnet-5-5', PORT = 8787 } = process.env;
 if (!ANTHROPIC_API_KEY || !APP_TOKEN) {
@@ -16,11 +18,11 @@ const WEB = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 6 }];
 const textOf = (msg) => msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
 const today = () => new Date().toISOString();
 
-let cache = null; // { at, data }
 const TTL = 10 * 60_000;
 
 async function briefing() {
-  if (cache && Date.now() - cache.at < TTL) return cache.data;
+  const cached = await getCachedBriefing(TTL);
+  if (cached) return cached;
   const msg = await client.messages.create({
     model: MODEL,
     max_tokens: 4000,
@@ -29,7 +31,7 @@ async function briefing() {
     messages: [{ role: 'user', content: `Current time: ${today()}. Produce the briefing now.` }],
   });
   const data = parseBriefing(textOf(msg));
-  cache = { at: Date.now(), data };
+  await saveBriefing(data);
   return data;
 }
 
@@ -42,15 +44,6 @@ async function ask(question, history = []) {
     messages: [...history.slice(-6), { role: 'user', content: question }],
   });
   return textOf(msg);
-}
-
-const hits = new Map(); // ip -> [timestamps]
-function limited(ip) {
-  const now = Date.now();
-  const arr = (hits.get(ip) ?? []).filter((t) => now - t < 3_600_000);
-  arr.push(now);
-  hits.set(ip, arr);
-  return arr.length > 40;
 }
 
 function body(req) {
@@ -66,7 +59,8 @@ http.createServer(async (req, res) => {
   try {
     if (req.url === '/health') return send(200, { ok: true });
     if (req.headers.authorization !== `Bearer ${APP_TOKEN}`) return send(401, { error: 'unauthorized' });
-    if (limited(req.socket.remoteAddress ?? '?')) return send(429, { error: 'rate limited' });
+    const client = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '?').split(',')[0].trim();
+    if (await rateLimited(client, req.url)) return send(429, { error: 'rate limited' });
     if (req.method === 'POST' && req.url === '/briefing') return send(200, await briefing());
     if (req.method === 'POST' && req.url === '/ask') {
       const { question, history } = await body(req);
@@ -78,4 +72,8 @@ http.createServer(async (req, res) => {
     console.error(e);
     send(500, { error: 'agent error' });
   }
-}).listen(PORT, () => console.log(`News agent listening on :${PORT}`));
+}).listen(PORT, () => {
+  console.log(`News agent listening on :${PORT} (storage: ${backend})`);
+  prune().catch(() => {});
+  setInterval(() => prune().catch(() => {}), 6 * 3_600_000);
+});

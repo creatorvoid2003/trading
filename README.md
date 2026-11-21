@@ -20,12 +20,15 @@ An AI analyst that searches the web for current and upcoming market-moving event
 The Anthropic API key stays on a small server, never in the app:
 ```
 cd server && npm install
-ANTHROPIC_API_KEY=sk-ant-... APP_TOKEN=pick-a-secret node index.mjs
+ANTHROPIC_API_KEY=sk-ant-... APP_TOKEN=pick-a-secret \
+SUPABASE_URL=https://bkspkukgzaerqubfndhz.supabase.co SUPABASE_SECRET_KEY=<secret key> node index.mjs
 ```
 Then start the app with the server's address:
 ```
 EXPO_PUBLIC_AGENT_URL=https://your-host:8787 EXPO_PUBLIC_AGENT_TOKEN=pick-a-secret npx expo start
 ```
+Supabase (project `trading-zones`) stores the 10-minute briefing cache and per-client rate limits, so they survive restarts and work across several server instances. Get the **secret key** from Supabase Dashboard > Project Settings > API Keys and keep it only in the server's environment. The tables have RLS on with no policies, so the app's public key can't read them. Without the two Supabase variables the server falls back to in-memory storage. The schema is in `supabase/migrations`.
+
 Note: anything in `EXPO_PUBLIC_*` is visible inside the app bundle, so treat the token as a light gate and rely on the server's rate limit. Briefings are cached for 10 minutes to control cost.
 
 ## Roadmap

@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "start": "node index.mjs", "test": "node --test ../tests/briefing.test.mjs" },
-  "dependencies": { "@anthropic-ai/sdk": "^0.70.0" }
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node --test ../tests/briefing.test.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "@supabase/supabase-js": "^2.50.0"
+  }
 }
