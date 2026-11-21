@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "test": "node --experimental-strip-types --test tests/sessions.test.ts"
+    "test": "node --experimental-strip-types --test tests/sessions.test.ts tests/briefing.test.mjs"
   },
   "dependencies": {
     "expo": "~54.0.0",

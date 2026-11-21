@@ -14,6 +14,20 @@ npx expo start           # scan the QR code with Expo Go
 npm test                 # session-logic tests
 ```
 
+## News & events agent
+An AI analyst that searches the web for current and upcoming market-moving events (central banks, CPI/NFP, earnings, geopolitics, energy) and explains how each could move gold and US stocks, with hot/soft scenarios. You can also ask it questions.
+
+The Anthropic API key stays on a small server, never in the app:
+```
+cd server && npm install
+ANTHROPIC_API_KEY=sk-ant-... APP_TOKEN=pick-a-secret node index.mjs
+```
+Then start the app with the server's address:
+```
+EXPO_PUBLIC_AGENT_URL=https://your-host:8787 EXPO_PUBLIC_AGENT_TOKEN=pick-a-secret npx expo start
+```
+Note: anything in `EXPO_PUBLIC_*` is visible inside the app bundle, so treat the token as a light gate and rely on the server's rate limit. Briefings are cached for 10 minutes to control cost.
+
 ## Roadmap
 - Gold-specific holiday hours (CME gold closes early on some US holidays)
 - Economic-calendar events layered on the timeline

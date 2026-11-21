@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import NewsAgent from './src/NewsAgent';
 import { loadEnabled, scheduleAlerts, setEnabled } from './src/notify';
 import { SESSIONS, windowsAround, zoneAt, stockView, fmtDuration, Level } from './src/sessions';
 
@@ -91,6 +92,8 @@ export default function App() {
         </Pressable>
 
         <Timeline now={now} />
+
+        <NewsAgent />
 
         <View style={s.card}>
           <Text style={s.h2}>Guardrails</Text>
