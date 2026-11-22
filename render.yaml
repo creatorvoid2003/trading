@@ -1,0 +1,18 @@
+# One-click deploy on Render: New > Blueprint > pick this repo. Free plan works.
+services:
+  - type: web
+    name: trading-news-agent
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: ./server
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        value: https://bkspkukgzaerqubfndhz.supabase.co
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: APP_TOKEN
+        sync: false

@@ -31,6 +31,12 @@ Supabase (project `trading-zones`) stores the 10-minute briefing cache and per-c
 
 Note: anything in `EXPO_PUBLIC_*` is visible inside the app bundle, so treat the token as a light gate and rely on the server's rate limit. Briefings are cached for 10 minutes to control cost.
 
+## Install on phones (no computer needed)
+1. **Deploy the server:** on render.com choose New > Blueprint, pick this repo, and fill in the three secret values.
+2. **Add two GitHub secrets** (repo Settings > Secrets and variables > Actions): `EXPO_PUBLIC_AGENT_URL` (your Render address) and `EXPO_PUBLIC_AGENT_TOKEN` (the same value as `APP_TOKEN`).
+3. **Build:** repo Actions tab > Build Android APK > Run workflow. After about 15 minutes, open the run and download the `trading-zones-apk` artifact (a zip containing the .apk).
+4. Send the .apk to friends; they open it and allow installs from unknown sources. Android only. iPhone needs an Apple Developer account and TestFlight.
+
 ## Roadmap
 - Gold-specific holiday hours (CME gold closes early on some US holidays)
 - Economic-calendar events layered on the timeline
